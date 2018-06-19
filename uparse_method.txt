@@ -1,0 +1,27 @@
+#Paired read uparse  method - if there is a problem it is usually caused by underscores and dashes in the file names, looking at the renamed merged file should detect the problem:
+e.g. fasta headers should look like:
+@sample_nameXXX.1
+
+
+#gunzip reads if necessary - in read folder do:
+gunzip *.gz
+
+# merge reads - puts reads into one file and renames them
+usearch -fastq_mergepairs ~/d/043_seagrass/reads/*_R1.fastq -fastqout merged.fastq -relabel @ 
+
+#examine length histogram to find best cut-off
+python read-histogram.py merged.fastq fastq 25
+
+#filter and clip reads by quality using best length from above
+usearch -fastq_filter merged.fastq -fastq_truncqual 18 -fastq_maxee 1.0 -fastq_minlen 300 -fastaout filtered.fasta
+
+#remove primers if necessary - nb reverse primer is the reverse complement - use revcomp.py <seq> if you need it
+python clip_at_primers.py filtered.fasta filtered-clipped.fasta NCTAYGGGRBGCASCAG ATTAGATACCCNNGTAGTCN
+
+usearch -derep_fulllength filtered-clipped.fasta -sizeout -fastaout uniques.fa
+usearch -cluster_otus uniques.fa -minsize 2 -otus otus.fa -relabel Otu
+usearch -utax otus.fa -db ~/db/utax/16s.udb -strand both -strand both -fastaout otus_tax.fa -utax_cutoff 0.9 -log utax.log
+usearch -usearch_global otus.fa -db ~/db/utax/16s.udb -strand both -id 0.97 -alnout otus_ref.aln -userout otus_ref.user -userfields query+target+id
+usearch -usearch_global merged.fastq -db otus_tax.fa -strand both -id 0.97 -log make_otutab.log -otutabout otutab.txt -biomout otutab.biom
+
+
